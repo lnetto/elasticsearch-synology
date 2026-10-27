@@ -61,6 +61,33 @@ No prebuilt image is published; build it on your own machine. The GitHub
 Actions workflow (`.github/workflows/build.yml`) builds and tests the newest 9.x
 release every day, so a release that breaks the patch shows up as a failed check.
 
+## Updating to a new Elasticsearch version
+
+When a new release comes out (say 9.6.0):
+
+```sh
+cd elasticsearch-synology
+git pull                 # get any fixes to the patch
+./build.sh 9.6.0         # build and test the patched 9.6.0 image
+```
+
+Change the image tag in your compose file
+(`elasticsearch-synology:9.5.5` → `elasticsearch-synology:9.6.0`), then:
+
+```sh
+docker compose up -d     # recreates the container on the new image; data stays in the volume
+```
+
+- **There's no going back.** Once a newer version has opened the data folder, the
+  older one can't read it. Take a snapshot first, or stop the container and copy
+  the data folder.
+- **Upgrade Kibana after Elasticsearch,** to the same version.
+- **Multi-node clusters:** upgrade one node at a time, and wait for the cluster to
+  go green before the next one.
+- **If `build.sh` fails at a `test "$(grep -c ...)" = 1` line,** Elastic changed
+  the code the patch depends on. Keep running the version you have and check
+  this repo for an updated patch. The daily CI build exists to catch this early.
+
 ## Running it
 
 See `docker-compose.example.yml` for a single node in Container Manager.
