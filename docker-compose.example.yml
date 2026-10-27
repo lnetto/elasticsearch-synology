@@ -1,0 +1,35 @@
+# Single node for Synology Container Manager. Build the image first: ./build.sh 9.5.5
+#
+# - Security stays on: set ELASTIC_PASSWORD in a .env next to this file.
+# - node.store.allow_mmap=false avoids needing vm.max_map_count=262144 on the host.
+#   If you can change the host, a DSM boot task running
+#   `sysctl -w vm.max_map_count=262144` is faster; then drop that line.
+# - Synology share ACLs reject unknown uids (the image's default is 1000), so the
+#   container runs as your NAS user's uid with gid 0. Find it with `id -u`.
+# - Keep the data folder on SSD/NVMe if you can; HDD fsync is slow.
+
+services:
+  elasticsearch:
+    image: elasticsearch-synology:9.5.5
+    container_name: elasticsearch
+    restart: unless-stopped
+    user: "1026:0"
+    environment:
+      discovery.type: single-node
+      node.store.allow_mmap: "false"
+      ES_JAVA_OPTS: -Xms2g -Xmx2g
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"   # put TLS on your reverse proxy, or enable it here with certs
+    volumes:
+      - /volume1/docker/elasticsearch/data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"   # LAN only; don't expose this image to the internet
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65535, hard: 65535 }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -u elastic:$${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
