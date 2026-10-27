@@ -1,13 +1,14 @@
-# Daily: build the newest stable 9.x release if it isn't in GHCR yet, smoke-test
-# it, and push it as ghcr.io/<owner>/elasticsearch-synology:<version> and :latest.
-# Run it by hand (Actions -> build -> Run workflow) to build a specific version.
+# Daily check that the patch still applies: build the newest stable 9.x release
+# and smoke-test it. Nothing is published; people build the image themselves.
+# Run it by hand (Actions -> build -> Run workflow) to test a specific version.
 #
-# GitHub's runners have seccomp, so the smoke test checks that the image works but
-# not the patched no-seccomp path; build.sh on a Synology box checks that.
+# GitHub's runners have seccomp, so this checks that the patched image builds and
+# works, but not the no-seccomp path itself; build.sh on a Synology box checks that.
 name: build
 on:
   schedule:
     - cron: "30 6 * * *"
+  push:
   workflow_dispatch:
     inputs:
       version:
@@ -16,40 +17,11 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pick version
-        id: v
-        run: |
-          V="${{ inputs.version }}"
-          [ -n "$V" ] || V=$(curl -fsSL 'https://hub.docker.com/v2/repositories/library/elasticsearch/tags?page_size=100&name=9.' |
-            grep -oE '"name":"9\.[0-9]+\.[0-9]+"' | cut -d'"' -f4 | sort -V | tail -1)
-          [ -n "$V" ] || { echo "no version found"; exit 1; }
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/elasticsearch-synology" >> "$GITHUB_OUTPUT"
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - name: Skip if already built
-        id: have
-        if: inputs.version == ''
-        run: |
-          if docker manifest inspect "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}" >/dev/null 2>&1; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "already built"
-          fi
       - name: Build and smoke test
-        if: steps.have.outputs.skip != 'true'
-        run: ./build.sh "${{ steps.v.outputs.version }}"
-      - name: Push
-        if: steps.have.outputs.skip != 'true'
-        run: |
-          V="${{ steps.v.outputs.version }}" IMG="${{ steps.v.outputs.image }}"
-          docker tag "elasticsearch-synology:$V" "$IMG:$V"
-          docker push "$IMG:$V"
-          NEWEST=$(curl -fsSL 'https://hub.docker.com/v2/repositories/library/elasticsearch/tags?page_size=100&name=9.' |
-            grep -oE '"name":"9\.[0-9]+\.[0-9]+"' | cut -d'"' -f4 | sort -V | tail -1)
-          if [ "$V" = "$NEWEST" ]; then docker tag "elasticsearch-synology:$V" "$IMG:latest"; docker push "$IMG:latest"; fi
+        run: ./build.sh ${{ inputs.version }}

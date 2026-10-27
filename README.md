@@ -57,8 +57,9 @@ with Container Manager's legacy builder; buildx isn't needed.
 Or build directly:
 `docker build --build-arg ES_VERSION=9.5.5 -t elasticsearch-synology:9.5.5 .`
 
-The GitHub Actions workflow (`.github/workflows/build.yml`) does the same every
-day for new 9.x releases and pushes them to GHCR.
+No prebuilt image is published; build it on your own machine. The GitHub
+Actions workflow (`.github/workflows/build.yml`) builds and tests the newest 9.x
+release every day, so a release that breaks the patch shows up as a failed check.
 
 ## Running it
 
